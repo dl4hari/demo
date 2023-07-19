@@ -1,105 +1,75 @@
-package con.xx.sync.processor;
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-import com.siebel.data.SiebelPropertySet;
-import com.xx.chassis.logging.slf4j.Logger;
-import com.xx.chassis.logging.slf4j.LoggerFactory;
-import com.xx.sync.dto.SyncRequest;
-import com.xx.sync.model.*;
-import com.xx.sync.siebel.queries.RAMSiebelServiceMethod;
-import con.xx.sync.digester.SiebelAdminProfileDigester;
-import con.xx.sync.exceptions.InvalidMessageException;
-import con.xx.sync.service.*;
-import ong.springFramework.core.ParameterizedTypeReference;
-import ong.springfrasework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Autowired;
+    <!-- Your project details -->
+    <groupId>com.example</groupId>
+    <artifactId>your-project</artifactId>
+    <version>1.0.0</version>
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+    <properties>
+        <spring.boot.version>2.5.3</spring.boot.version>
+        <swagger.codegen.version>3.0.0</swagger.codegen.version>
+    </properties>
 
-import static com.xx.sync.utils.DataUtility.replaceIfNull;
-import static com.xx.sync.utils.IDMConstants.*;
+    <dependencies>
+        <!-- Spring Boot Starter Web - Add other Spring Boot starters as per your project requirements -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <version>${spring.boot.version}</version>
+        </dependency>
 
-@Service("addOrUpdateAdmin")
-public class UpdateAdminProcessor implements MessageProcessor {
+        <!-- Swagger Codegen Maven Plugin -->
+        <dependency>
+            <groupId>io.swagger.codegen.v3</groupId>
+            <artifactId>swagger-codegen-cli</artifactId>
+            <version>${swagger.codegen.version}</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
 
-    private static final String STATUS_CODE_ADD = "C";
-    private static final String STATUS_CODE_REMOVE = "D";
+    <build>
+        <plugins>
+            <!-- Maven Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
 
-    private final Logger log = LoggerFactory.getLogger(UpdateAdminProcessor.class);
-
-    @Autowired
-    private UserService userService;
-
-    private String userName;
-
-    @Override
-    public boolean validate(SyncRequest request) throws InvalidMessageException {
-        log.debug("Entering validate() - {}", request);
-        userName = Optional.ofNullable(request.getMessagePayLoad().get(USER_NAME))
-                .map(Object::toString)
-                .orElseThrow(() -> new InvalidMessageException("Invalid request; userName not found"));
-
-        log.info("Validate request completed");
-        return true;
-    }
-
-    @Override
-    public String process(SyncRequest request, IdmService idmService, RAMSiebelService siebelService) throws Exception {
-        IdmAdminProfile idmResponse = idmService.get(
-                CON_CONFIG_ADMIN_PROFILE_ENDPOINT + userName,
-                new ParameterizedTypeReference<IdmAdminProfile>() {},
-                true);
-
-        log.info("IDM Response: {}", idmResponse);
-
-        IdmAdminProfileResult adminProfileResultResponse = idmResponse.getResult();
-
-        String adminType = replaceIfNull(adminProfileResultResponse.getAuthRole(), "");
-
-        List<IdmOrganization> addAdminOfOrgs = filterOrganizationsByStatusCode(adminProfileResultResponse.getAdminOfOrgs(), STATUS_CODE_ADD);
-        List<IdmOrganization> removeAdminOfOrgs = filterOrganizationsByStatusCode(adminProfileResultResponse.getAdminOfOrgs(), STATUS_CODE_REMOVE);
-        List<IdmOrganization> addOwnerOfOrgs = filterOrganizationsByStatusCode(adminProfileResultResponse.getUaManagedApps(), STATUS_CODE_ADD);
-        List<IdmOrganization> removeOwnerOfOrgs = filterOrganizationsByStatusCode(adminProfileResultResponse.getUaManagedApps(), STATUS_CODE_REMOVE);
-
-        AdminProfileUpdateRequest adminProfileUpdateRequest = new AdminProfileUpdateRequest();
-        adminProfileUpdateRequest.setAddOrgs(addAdminOfOrgs);
-        adminProfileUpdateRequest.setRemoveOrgs(removeAdminOfOrgs);
-        adminProfileUpdateRequest.setAddOrganizations(addOwnerOfOrgs);
-
-        String roleName = adminType.equals("CA") ? "CorpAdmin" : "UserAdmin";
-
-        RAMSiebelServiceMethod ramSiebelServiceMethod = adminType.equals("CA")
-                ? RAMSiebelServiceMethod.UPSERT_CORP_ADMIN_PROFILE
-                : RAMSiebelServiceMethod.UPSERT_USER_ADMIN_PROFILE;
-
-        User user = userService.getUser(userName);
-
-        SiebelPropertySet siebelPropertySet = SiebelAdminProfileDigester.getPropertySetByType(user, adminProfileUpdateRequest, roleName);
-        SiebelPropertySet outputPS = siebelService.executeUpsert(ramSiebelServiceMethod, siebelPropertySet);
-
-        boolean isSiebelCallSuccessful = SiebelAdminProfileDigester.verifyResultSiebelPropertySet(outputPS);
-
-        log.info("For userId {}, the update is {}", userName, isSiebelCallSuccessful ? "Successful" : "Unsuccessful");
-        log.debug("Result of the admin profile update: {}", outputPS.toString());
-
-        log.info("Completed the Admin Profile update");
-        return null; // TODO: Add a meaningful return value
-    }
-
-    @Override
-    public void postProcess() {
-        // TODO: Add post-processing logic if needed
-    }
-    
-    private List<IdmOrganization> filterOrganizationsByStatusCode(List<? extends IdmOrganization> organizations, String statusCode) {
-        List<IdmOrganization> filteredOrganizations = new ArrayList<>();
-        for (IdmOrganization organization : organizations) {
-            if (organization != null && statusCode.equals(replaceIfNull(organization.getStatusCode(), ""))) {
-                filteredOrganizations.add(organization);
-            }
-        }
-        return filteredOrganizations;
-    }
-}
-
+            <!-- Swagger Codegen Plugin -->
+            <plugin>
+                <groupId>io.swagger.codegen.v3</groupId>
+                <artifactId>swagger-codegen-maven-plugin</artifactId>
+                <version>${swagger.codegen.version}</version>
+                <executions>
+                    <execution>
+                        <id>generate-spring</id>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Specify the location of your OpenAPI specification file -->
+                            <inputSpec>src/main/resources/openapi.yaml</inputSpec>
+                            <!-- Specify the output directory for the generated code -->
+                            <output>${project.build.directory}/generated-sources/swagger</output>
+                            <!-- Set the code generator to use Spring options -->
+                            <generatorName>spring</generatorName>
+                            <!-- Customize the generated API package and model package names -->
+                            <apiPackage>com.example.api</apiPackage>
+                            <modelPackage>com.example.model</modelPackage>
+                            <!-- You can add more configuration options based on your requirements -->
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
